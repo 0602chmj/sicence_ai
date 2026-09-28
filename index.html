@@ -202,15 +202,11 @@
   <div class="auth-card">
     <div id="login-form">
       <h2>🔭 사이언스</h2>
-      <div class="auth-sub">로그인하고 내 기록을 저장해보세요.</div>
+      <div class="auth-sub">아이디를 입력하고 로그인하세요.</div>
       <div class="auth-error hidden" id="login-error"></div>
       <div class="auth-field">
         <label for="login-id">아이디</label>
-        <input type="text" id="login-id" autocomplete="username" />
-      </div>
-      <div class="auth-field">
-        <label for="login-pw">비밀번호</label>
-        <input type="password" id="login-pw" autocomplete="current-password" />
+        <input type="text" id="login-id" placeholder="예: 주니" autocomplete="username" />
       </div>
       <button class="auth-submit-btn" id="login-btn">로그인</button>
       <div class="auth-switch">계정이 없으신가요? <button id="show-signup">회원가입</button></div>
@@ -218,19 +214,11 @@
 
     <div id="signup-form" class="hidden">
       <h2>✨ 회원가입</h2>
-      <div class="auth-sub">아이디와 비밀번호를 정해주세요.</div>
+      <div class="auth-sub">사용할 아이디를 정해주세요.</div>
       <div class="auth-error hidden" id="signup-error"></div>
       <div class="auth-field">
         <label for="signup-id">아이디</label>
-        <input type="text" id="signup-id" autocomplete="username" />
-      </div>
-      <div class="auth-field">
-        <label for="signup-pw">비밀번호</label>
-        <input type="password" id="signup-pw" autocomplete="new-password" />
-      </div>
-      <div class="auth-field">
-        <label for="signup-pw2">비밀번호 확인</label>
-        <input type="password" id="signup-pw2" autocomplete="new-password" />
+        <input type="text" id="signup-id" placeholder="예: 주니" autocomplete="username" />
       </div>
       <button class="auth-submit-btn" id="signup-btn">가입하기</button>
       <div class="auth-switch">이미 계정이 있으신가요? <button id="show-login">로그인</button></div>
@@ -1632,22 +1620,18 @@ musicToggleBtn.addEventListener('click', () => {
 });
 
 
-/* ========================= 로그인 / 회원가입 ========================= */
+/* ========================= 로그인 / 회원가입 (아이디 중복 체크, 비밀번호 없음) ========================= */
 const USERS_KEY = 'science_users';
 const SESSION_KEY = 'science_session';
 
-// 간단한 문자열 해시 (완전한 보안용은 아니고, 평문 저장을 피하기 위한 용도)
-function simpleHash(str) {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    hash = (Math.imul(31, hash) + str.charCodeAt(i)) | 0;
-  }
-  return String(hash);
-}
-
 function loadUsers() {
-  try { return JSON.parse(localStorage.getItem(USERS_KEY) || '{}'); }
-  catch (e) { return {}; }
+  try {
+    const parsed = JSON.parse(localStorage.getItem(USERS_KEY) || '[]');
+    if (Array.isArray(parsed)) return parsed;
+    // 예전 버전(비밀번호 방식)에서 저장된 { 아이디: 값 } 형태도 아이디 목록으로 이어받기
+    if (parsed && typeof parsed === 'object') return Object.keys(parsed);
+    return [];
+  } catch (e) { return []; }
 }
 function saveUsers(users) {
   try { localStorage.setItem(USERS_KEY, JSON.stringify(users)); } catch (e) {}
@@ -1699,38 +1683,41 @@ document.getElementById('show-login').addEventListener('click', () => {
 });
 
 document.getElementById('signup-btn').addEventListener('click', () => {
-  const id = document.getElementById('signup-id').value.trim();
-  const pw = document.getElementById('signup-pw').value;
-  const pw2 = document.getElementById('signup-pw2').value;
-  hideAuthError(signupError);
+  try {
+    const id = document.getElementById('signup-id').value.trim();
+    hideAuthError(signupError);
 
-  if (!id || !pw) return showAuthError(signupError, '아이디와 비밀번호를 모두 입력해주세요.');
-  if (id.length < 2) return showAuthError(signupError, '아이디는 2자 이상으로 입력해주세요.');
-  if (pw.length < 4) return showAuthError(signupError, '비밀번호는 4자 이상으로 입력해주세요.');
-  if (pw !== pw2) return showAuthError(signupError, '비밀번호가 서로 일치하지 않아요.');
+    if (!id) return showAuthError(signupError, '아이디를 입력해주세요.');
+    if (id.length > 12) return showAuthError(signupError, '아이디는 12자 이내로 입력해주세요.');
 
-  const users = loadUsers();
-  if (users[id]) return showAuthError(signupError, '이미 사용 중인 아이디예요.');
+    const users = loadUsers();
+    if (users.includes(id)) return showAuthError(signupError, '이미 사용 중인 아이디예요.');
 
-  users[id] = simpleHash(pw);
-  saveUsers(users);
-  setSession(id);
-  enterApp(id);
+    users.push(id);
+    saveUsers(users);
+    setSession(id);
+    enterApp(id);
+  } catch (err) {
+    showAuthError(signupError, '가입 중 문제가 생겼어요: ' + (err && err.message ? err.message : err));
+  }
 });
 
 document.getElementById('login-btn').addEventListener('click', () => {
-  const id = document.getElementById('login-id').value.trim();
-  const pw = document.getElementById('login-pw').value;
-  hideAuthError(loginError);
+  try {
+    const id = document.getElementById('login-id').value.trim();
+    hideAuthError(loginError);
 
-  if (!id || !pw) return showAuthError(loginError, '아이디와 비밀번호를 입력해주세요.');
+    if (!id) return showAuthError(loginError, '아이디를 입력해주세요.');
 
-  const users = loadUsers();
-  if (!users[id] || users[id] !== simpleHash(pw)) {
-    return showAuthError(loginError, '아이디 또는 비밀번호가 올바르지 않아요.');
+    const users = loadUsers();
+    if (!users.includes(id)) {
+      return showAuthError(loginError, '등록되지 않은 아이디예요. 먼저 회원가입을 해주세요.');
+    }
+    setSession(id);
+    enterApp(id);
+  } catch (err) {
+    showAuthError(loginError, '로그인 중 문제가 생겼어요: ' + (err && err.message ? err.message : err));
   }
-  setSession(id);
-  enterApp(id);
 });
 
 document.getElementById('logout-btn').addEventListener('click', () => {
@@ -1743,15 +1730,15 @@ document.getElementById('logout-btn').addEventListener('click', () => {
   loginForm.classList.remove('hidden');
   signupForm.classList.add('hidden');
   document.getElementById('login-id').value = '';
-  document.getElementById('login-pw').value = '';
+  document.getElementById('signup-id').value = '';
 });
 
-['login-id', 'login-pw'].forEach(id => {
+['login-id'].forEach(id => {
   document.getElementById(id).addEventListener('keydown', e => {
     if (e.key === 'Enter') document.getElementById('login-btn').click();
   });
 });
-['signup-id', 'signup-pw', 'signup-pw2'].forEach(id => {
+['signup-id'].forEach(id => {
   document.getElementById(id).addEventListener('keydown', e => {
     if (e.key === 'Enter') document.getElementById('signup-btn').click();
   });
@@ -1761,7 +1748,7 @@ document.getElementById('logout-btn').addEventListener('click', () => {
 (function autoLogin() {
   const session = getSession();
   const users = loadUsers();
-  if (session && users[session]) enterApp(session);
+  if (session && users.includes(session)) enterApp(session);
 })();
 </script>
 </body>
